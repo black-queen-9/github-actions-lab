@@ -1,0 +1,70 @@
+name: Python CI with Tests and Artifacts # Название вашего workflow
+
+# Триггеры (когда запускается этот workflow):
+# 1. При пуше (заливке кода) в ветку main
+# 2. При создании Pull Request в ветку main
+# 3. Вручную из вкладки Actions
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Позволяет запустить вручную
+
+# Определяем Jobs (работы/задачи), которые будут выполнены.
+# У нас их две, и они идут последовательно.
+jobs:
+  # Job 1: Тестирование (Test)
+  test:
+    # Запускаем на последней Ubuntu (виртуальная машина от GitHub)
+    runs-on: ubuntu-latest
+
+    # Шаги, которые выполнятся внутри этой Job
+    steps:
+      # Шаг 1: Выгрузка репозитория
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Шаг 2: Настройка окружения (установка Python)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Указываем версию Python
+
+      # Шаг 3: Установка необходимых модулей из requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Шаг 4: Запуск модульных тестов и генерация HTML-отчета
+      - name: Run tests with pytest
+        run: |
+          pytest --html=report.html --self-contained-html -v
+
+      # Шаг 5: Выгрузка отчета как артефакт (сохраняется на 30 дней)
+      - name: Upload test report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-html # Имя артефакта
+          path: report.html # Какой файл загружаем
+          retention-days: 30 # Сколько дней хранить
+
+  # Job 2: Выгрузка кода (только если Job "test" завершилась успешно)
+  deploy:
+    # Зависит от успешного выполнения Job "test"
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Шаг 1: Снова выгружаем репозиторий (чтобы получить код)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Шаг 2: Выгружаем исходный код как артефакт
+      - name: Upload source code artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-code-success # Имя артефакта
+          path: . # Точка означает "всю текущую папку проекта"
+          retention-days: 30
